@@ -7,22 +7,6 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
-// int main(int argc, char *argv[]){
-//     int fd;
-//     int counter = 0;
-//     if((fd = open("./random_files/tmp075pajyz",O_RDWR))>=0){
-//         char c;
-        
-//         while (read(fd,&c,1)==1)
-//         {
-//             if (c>=32 && c<=126)
-//                 counter++;
-//         }
-        
-//     }
-//     printf("%d",counter);
-// }
-
 
 /* argv[1]: server’s IP address (assume a valid IP address)
    argv[2]: server’s port (assume a 16-bit unsigned integer).
