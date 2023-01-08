@@ -8,6 +8,9 @@
 #include <unistd.h>
 #include <signal.h>
 
+#define MIN(a,b) (((a)<(b))?(a):(b)) // code for minimum
+#define MAX_CHUNK 1048576// one megabyte
+
 //globals for signal handler access
 int* pcc_total;
 int flag = 0; // 1 if getting SIGINT signal during TCP connection handling
@@ -93,10 +96,10 @@ int main(int argc, char *argv[]){
         fprintf(stderr,"Error in listen: %s", strerror(errno));
         exit(EXIT_FAILURE);
     }
-    // Handle sigint
-    signal(SIGINT, sighandler);
     //initialize pcc_total
     pcc_total = (int *)calloc(95, sizeof(int));
+    // Handle sigint
+    signal(SIGINT, sighandler);
     while (1){
         // accept a connection on a socket similar to extra work 10
         connfd = accept( listenfd,NULL,NULL);
@@ -122,37 +125,48 @@ int main(int argc, char *argv[]){
             continue;
         }
         N = ntohl(N);
-        // Read N bytes transfered similat to extra work 10
-        recv_buff = malloc(N);
-        if(recv_buff==NULL){
-        fprintf(stderr,"Error in malloc: %s", strerror(errno));
-        exit(EXIT_FAILURE);
-        }
-        notwread = N;
-        totalread = 0;
-        while( notwread > 0 )
-        {
-            nread = read(connfd,recv_buff + totalread,notwread);
-            if (nread<=0){
+        // Read N bytes transfered similar to extra work 10
+        uint32_t total_bytes = N;
+        int connection_flag=0;
+        C=0;
+        while (total_bytes>0){
+            uint32_t bytes_to_transfer = MIN(total_bytes,MAX_CHUNK);
+            recv_buff = malloc(bytes_to_transfer);
+            if(recv_buff==NULL){
+                fprintf(stderr,"Error in malloc: %s", strerror(errno));
+                exit(EXIT_FAILURE);
+            }
+            notwread = bytes_to_transfer;
+            totalread = 0;
+            while( notwread > 0 )
+            {
+                nread = read(connfd,recv_buff + totalread,notwread);
+                if (nread<=0){
+                    break;
+                }
+                totalread  += nread;
+                notwread -= nread;
+            }
+            // check Client connections which may terminate unexpectedly due to TCP errors
+            connection_flag = check_client_connection(nread);
+            if (connection_flag<0){
                 break;
             }
-            totalread  += nread;
-            notwread -= nread;
+            // update C and pcc_total
+            for(int i=0;i<bytes_to_transfer;i++){
+                int temp = (int)recv_buff[i];
+                if (temp>=32 && temp<=126){
+                    pcc_total[temp-32]++;
+                    C++;
+                }  
+            }
+            free(recv_buff);
+            total_bytes-=totalread;
+
         }
-        // check Client connections which may terminate unexpectedly due to TCP errors
-        if (check_client_connection(nread)<0){
+        if (connection_flag<0){
             continue;
         }
-        // update C and pcc_total
-        C=0;
-        for(int i=0;i<N;i++){
-            int temp = (int)recv_buff[i];
-            if (temp>=32 && temp<=126){
-                pcc_total[temp-32]++;
-                C++;
-            }  
-        }
-        free(recv_buff);
         // Send C - number of bytes in file similar to extra work 10
         C = htonl(C);
         C_buff = (char*)&C;

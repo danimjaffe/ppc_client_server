@@ -7,6 +7,8 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
+#define MIN(a,b) (((a)<(b))?(a):(b))// code for minimum
+#define MAX_CHUNK 1048576// one megabyte
 
 /* argv[1]: server’s IP address (assume a valid IP address)
    argv[2]: server’s port (assume a 16-bit unsigned integer).
@@ -36,7 +38,6 @@ int main(int argc, char *argv[]){
         fprintf(stderr,"Error: %s", strerror(errno));
         exit(EXIT_FAILURE);
     }
-
     // create socket similar to extra work 10
     if( (sockfd = socket(AF_INET, SOCK_STREAM, 0))==-1){
         fprintf(stderr,"Error: %s", strerror(errno));
@@ -72,27 +73,33 @@ int main(int argc, char *argv[]){
     }
     // Send N bytes from file similar to extra work 10
     N = ntohl(N);
-    data_buff = malloc(N);
-    if(data_buff==NULL){
-        fprintf(stderr,"Error in malloc: %s", strerror(errno));
-        exit(EXIT_FAILURE);
-    }
-    lseek(fd, 0, SEEK_SET);
-    if (read(fd,data_buff,N)!=N){
-        fprintf(stderr,"Error in read: %s", strerror(errno));
-        exit(EXIT_FAILURE);
-    }
-    notwritten = N;
-    totalsent=0;
-    while( notwritten > 0 )
+    uint32_t total_bytes = N;
+    lseek(fd, 0, SEEK_SET); // set fd to begginning of file
+    while (total_bytes>0)
     {
-      nsent = write(sockfd,data_buff + totalsent,notwritten);
-      if (nsent==-1){
-        fprintf(stderr,"Error: %s", strerror(errno));
-        exit(EXIT_FAILURE);
-      }
-      totalsent  += nsent;
-      notwritten -= nsent;
+        uint32_t bytes_to_transfer = MIN(total_bytes,MAX_CHUNK);
+        data_buff = malloc(bytes_to_transfer);
+        if(data_buff==NULL){
+            fprintf(stderr,"Error in malloc: %s", strerror(errno));
+            exit(EXIT_FAILURE);
+        }
+        if (read(fd,data_buff,bytes_to_transfer)!=bytes_to_transfer){
+            fprintf(stderr,"Error in read: %s", strerror(errno));
+            exit(EXIT_FAILURE);
+        }
+        notwritten = bytes_to_transfer;
+        totalsent=0;
+        while( notwritten > 0 ){
+            nsent = write(sockfd,data_buff + totalsent,notwritten);
+            if (nsent==-1){
+                fprintf(stderr,"Error: %s", strerror(errno));
+                exit(EXIT_FAILURE);
+            }
+            totalsent  += nsent;
+            notwritten -= nsent;
+        }
+        total_bytes-=totalsent;
+        free(data_buff);
     }
     // read C from server
     C_buff = (char *)&C;
